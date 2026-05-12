@@ -21,4 +21,4 @@
             </ul>
         </div>
     </nav>
-    <main></main>
+    <main>

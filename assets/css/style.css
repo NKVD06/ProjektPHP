@@ -401,3 +401,47 @@ footer {
     padding: 1.5rem;
     margin-top: 3rem;
 }
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.breadcrumb {
+    padding: 1rem 0;
+    color: #666;
+}
+
+.breadcrumb a {
+    color: #1a1a2e;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: #e94560;
+}
+
+.country-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.season {
+    color: #666;
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.icon {
+    margin-right: 0.25rem;
+}
+
+.alert ul {
+    margin: 0.5rem 0 0 1.25rem;
+}
+
+.alert li {
+    margin: 0.25rem 0;
+}

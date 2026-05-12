@@ -1,7 +1,11 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../src/Core/Session.php';
+require_once __DIR__ . '/../../src/Validation/Validator.php';
 
-if (!isset($_SESSION['user_id'])) {
+$session = new Session();
+
+if (!$session->isLoggedIn()) {
     header('Location: ../login.php');
     exit;
 }
@@ -11,43 +15,59 @@ require_once __DIR__ . '/../../src/Models/Country.php';
 
 $continents = ['Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania', 'Antarctica'];
 $errors = [];
+$formData = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = [
-        'name' => trim($_POST['name'] ?? ''),
-        'capital' => trim($_POST['capital'] ?? ''),
-        'continent' => $_POST['continent'] ?? '',
-        'population' => (int)($_POST['population'] ?? 0),
-        'language' => trim($_POST['language'] ?? ''),
-        'currency' => trim($_POST['currency'] ?? ''),
-        'description' => trim($_POST['description'] ?? ''),
-        'image_url' => trim($_POST['image_url'] ?? ''),
-        'best_season' => trim($_POST['best_season'] ?? '')
-    ];
+    $csrfToken = $_POST['csrf_token'] ?? '';
     
-    if (empty($data['name'])) {
-        $errors[] = 'Country name is required';
-    }
-    if (empty($data['capital'])) {
-        $errors[] = 'Capital is required';
-    }
-    if (empty($data['continent'])) {
-        $errors[] = 'Continent is required';
-    }
-    if ($data['population'] <= 0) {
-        $errors[] = 'Valid population is required';
-    }
-    
-    if (empty($errors)) {
-        $db = (new Database())->getConnection();
-        $countryModel = new Country($db);
+    if (!$session->validateCsrfToken($csrfToken)) {
+        $errors[] = 'Invalid security token. Please try again.';
+    } else {
+        $validator = new Validator($_POST);
+        $validator->required('name', 'Country name is required')
+                  ->minLength('name', 2, 'Country name must be at least 2 characters')
+                  ->required('capital', 'Capital is required')
+                  ->required('continent', 'Continent is required')
+                  ->required('population', 'Population is required')
+                  ->numeric('population', 'Population must be a valid positive number')
+                  ->url('image_url', 'Please enter a valid URL for the image');
         
-        if ($countryModel->create($data)) {
-            header('Location: index.php');
-            exit;
+        if ($validator->passes()) {
+            try {
+                $db = (new Database())->getConnection();
+                $countryModel = new Country($db);
+                
+                $data = [
+                    'name' => $_POST['name'],
+                    'capital' => $_POST['capital'],
+                    'continent' => $_POST['continent'],
+                    'population' => (int)$_POST['population'],
+                    'language' => $_POST['language'] ?? '',
+                    'currency' => $_POST['currency'] ?? '',
+                    'description' => $_POST['description'] ?? '',
+                    'image_url' => $_POST['image_url'] ?? '',
+                    'best_season' => $_POST['best_season'] ?? ''
+                ];
+                
+                $newId = $countryModel->create($data);
+                
+                if ($newId) {
+                    $session->set('success', 'Country added successfully!');
+                    header('Location: index.php');
+                    exit;
+                } else {
+                    $errors[] = 'Failed to create country. Please try again.';
+                }
+            } catch (Exception $e) {
+                error_log("Error creating country: " . $e->getMessage());
+                $errors[] = 'An error occurred. Please try again.';
+            }
+        } else {
+            $errors = $validator->getErrors();
         }
-        $errors[] = 'Failed to create country';
     }
+    
+    $formData = $_POST;
 }
 ?>
 
@@ -57,32 +77,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h1>Add New Country</h1>
     
     <?php if (!empty($errors)): ?>
-        <div class="alert alert-error">
-            <?php foreach ($errors as $error): ?>
-                <p><?php echo htmlspecialchars($error); ?></p>
-            <?php endforeach; ?>
+        <div class="alert alert-error" role="alert">
+            <strong>Please fix the following errors:</strong>
+            <ul>
+                <?php foreach ($errors as $field => $error): ?>
+                    <li><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></li>
+                <?php endforeach; ?>
+            </ul>
         </div>
     <?php endif; ?>
     
-    <form method="POST">
+    <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="<?php echo $session->generateCsrfToken(); ?>">
+        
         <div class="form-row">
             <div class="form-group">
                 <label for="name">Country Name *</label>
-                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>" required>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       value="<?php echo htmlspecialchars($formData['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" 
+                       required 
+                       minlength="2"
+                       aria-required="true">
             </div>
             <div class="form-group">
                 <label for="capital">Capital *</label>
-                <input type="text" id="capital" name="capital" value="<?php echo htmlspecialchars($_POST['capital'] ?? ''); ?>" required>
+                <input type="text" 
+                       id="capital" 
+                       name="capital" 
+                       value="<?php echo htmlspecialchars($formData['capital'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" 
+                       required
+                       aria-required="true">
             </div>
         </div>
         
         <div class="form-row">
             <div class="form-group">
                 <label for="continent">Continent *</label>
-                <select id="continent" name="continent" required>
+                <select id="continent" name="continent" required aria-required="true">
                     <option value="">Select Continent</option>
                     <?php foreach ($continents as $continent): ?>
-                        <option value="<?php echo $continent; ?>" <?php echo ($_POST['continent'] ?? '') === $continent ? 'selected' : ''; ?>>
+                        <option value="<?php echo $continent; ?>" 
+                                <?php echo ($formData['continent'] ?? '') === $continent ? 'selected' : ''; ?>>
                             <?php echo $continent; ?>
                         </option>
                     <?php endforeach; ?>
@@ -90,34 +127,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="form-group">
                 <label for="population">Population *</label>
-                <input type="number" id="population" name="population" value="<?php echo $_POST['population'] ?? ''; ?>" required>
+                <input type="number" 
+                       id="population" 
+                       name="population" 
+                       value="<?php echo htmlspecialchars($formData['population'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" 
+                       required 
+                       min="1"
+                       aria-required="true">
             </div>
         </div>
         
         <div class="form-row">
             <div class="form-group">
                 <label for="language">Language</label>
-                <input type="text" id="language" name="language" value="<?php echo htmlspecialchars($_POST['language'] ?? ''); ?>">
+                <input type="text" 
+                       id="language" 
+                       name="language" 
+                       value="<?php echo htmlspecialchars($formData['language'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="form-group">
                 <label for="currency">Currency</label>
-                <input type="text" id="currency" name="currency" value="<?php echo htmlspecialchars($_POST['currency'] ?? ''); ?>">
+                <input type="text" 
+                       id="currency" 
+                       name="currency" 
+                       value="<?php echo htmlspecialchars($formData['currency'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
             </div>
         </div>
         
         <div class="form-group">
             <label for="best_season">Best Season to Visit</label>
-            <input type="text" id="best_season" name="best_season" placeholder="e.g., June - August" value="<?php echo htmlspecialchars($_POST['best_season'] ?? ''); ?>">
+            <input type="text" 
+                   id="best_season" 
+                   name="best_season" 
+                   placeholder="e.g., June - August" 
+                   value="<?php echo htmlspecialchars($formData['best_season'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
         </div>
         
         <div class="form-group">
             <label for="image_url">Image URL</label>
-            <input type="url" id="image_url" name="image_url" placeholder="https://example.com/image.jpg" value="<?php echo htmlspecialchars($_POST['image_url'] ?? ''); ?>">
+            <input type="url" 
+                   id="image_url" 
+                   name="image_url" 
+                   placeholder="https://example.com/image.jpg" 
+                   value="<?php echo htmlspecialchars($formData['image_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
         </div>
         
         <div class="form-group">
             <label for="description">Description</label>
-            <textarea id="description" name="description" rows="6"><?php echo htmlspecialchars($_POST['description'] ?? ''); ?></textarea>
+            <textarea id="description" 
+                      name="description" 
+                      rows="6"
+                      placeholder="Enter a detailed description of the country..."><?php echo htmlspecialchars($formData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
         </div>
         
         <div class="form-actions">

@@ -3,20 +3,28 @@ session_start();
 require_once __DIR__ . '/config/Database.php';
 require_once __DIR__ . '/src/Models/Country.php';
 
-$db = (new Database())->getConnection();
-$countryModel = new Country($db);
+try {
+    $db = (new Database())->getConnection();
+    $countryModel = new Country($db);
 
-$searchTerm = $_GET['search'] ?? '';
-$selectedContinent = $_GET['continent'] ?? '';
+    $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
+    $selectedContinent = isset($_GET['continent']) ? $_GET['continent'] : '';
 
-$continents = $countryModel->getContinents();
+    $continents = $countryModel->getContinents();
 
-if ($searchTerm) {
-    $countries = $countryModel->search($searchTerm);
-} elseif ($selectedContinent) {
-    $countries = $countryModel->getByContinent($selectedContinent);
-} else {
-    $countries = $countryModel->getAll();
+    if (!empty($searchTerm)) {
+        $countries = $countryModel->search($searchTerm);
+    } elseif (!empty($selectedContinent)) {
+        $countries = $countryModel->getByContinent($selectedContinent);
+    } else {
+        $countries = $countryModel->getAll();
+    }
+} catch (Exception $e) {
+    error_log("Index page error: " . $e->getMessage());
+    $countries = [];
+    $continents = [];
+    $searchTerm = '';
+    $selectedContinent = '';
 }
 ?>
 
@@ -26,7 +34,7 @@ if ($searchTerm) {
     <h1>Discover the World</h1>
     <p>Explore countries, plan your next adventure</p>
     
-    <form method="GET" class="search-form">
+    <form method="GET" action="index.php" class="search-form">
         <input type="text" 
                name="search" 
                placeholder="Search countries, capitals..." 
@@ -37,7 +45,7 @@ if ($searchTerm) {
 
 <section class="filters">
     <div class="continent-filters">
-        <a href="index.php" class="filter-btn <?php echo !$selectedContinent ? 'active' : ''; ?>">
+        <a href="index.php" class="filter-btn <?php echo empty($selectedContinent) ? 'active' : ''; ?>">
             All
         </a>
         <?php foreach ($continents as $continent): ?>
@@ -50,11 +58,15 @@ if ($searchTerm) {
 </section>
 
 <section class="countries">
+    <?php if (!empty($searchTerm)): ?>
+        <h2>Search results for: "<?php echo htmlspecialchars($searchTerm); ?>"</h2>
+    <?php endif; ?>
+    
     <div class="country-grid">
         <?php foreach ($countries as $country): ?>
             <div class="country-card">
                 <div class="country-image">
-                    <?php if ($country['image_url']): ?>
+                    <?php if (!empty($country['image_url'])): ?>
                         <img src="<?php echo htmlspecialchars($country['image_url']); ?>" 
                              alt="<?php echo htmlspecialchars($country['name']); ?>">
                     <?php else: ?>
@@ -73,6 +85,7 @@ if ($searchTerm) {
         <?php if (empty($countries)): ?>
             <div class="no-results">
                 <p>No countries found matching your criteria.</p>
+                <a href="index.php">Show all countries</a>
             </div>
         <?php endif; ?>
     </div>

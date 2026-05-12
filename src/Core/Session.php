@@ -33,4 +33,23 @@ class Session
     {
         return isset($_SESSION['user_id']);
     }
+
+    public function generateCsrfToken(): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $this->set('csrf_token', $token);
+        return $token;
+    }
+
+    public function validateCsrfToken(string $token): bool
+    {
+        $storedToken = $this->get('csrf_token');
+        $this->remove('csrf_token');
+        
+        if ($storedToken === null) {
+            return false;
+        }
+        
+        return hash_equals($storedToken, $token);
+    }
 }
