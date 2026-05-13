@@ -9,7 +9,7 @@
 <body>
     <nav>
         <div class="nav-container">
-            <a href="/travel-app/index.php" class="logo">Explore World</a>
+            <a href="/travel-app/index.php" class="logo">Explore the World</a>
             <ul class="nav-links">
                 <li><a href="/travel-app/index.php">Home</a></li>
                 <?php if (isset($_SESSION['user_id'])): ?>
